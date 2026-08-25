@@ -176,6 +176,62 @@ class DatabaseHelper {
       whereArgs: [oldCategoryId],
     );
   }
+
+  // ==========================================
+  // EXPORTATION : Génère le JSON sous forme de texte
+  // ==========================================
+  Future<String?> exportDatabaseToJsonString() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> categories = await db.query('categories');
+      final List<Map<String, dynamic>> expenses = await db.query('expenses');
+
+      final Map<String, dynamic> backupData = {
+        'version': 1,
+        'export_date': DateTime.now().toIso8601String(),
+        'categories': categories,
+        'expenses': expenses,
+      };
+
+      return const JsonEncoder.withIndent('  ').convert(backupData);
+    } catch (e) {
+      print('Erreur lors de l\'export JSON : $e');
+      return null;
+    }
+  }
+
+  // ==========================================
+  // IMPORTATION : Restaure depuis une chaîne JSON
+  // ==========================================
+  Future<bool> importDatabaseFromJsonString(String jsonString) async {
+    try {
+      final Map<String, dynamic> data = jsonDecode(jsonString);
+
+      if (!data.containsKey('categories') || !data.containsKey('expenses')) {
+        return false;
+      }
+
+      final db = await database;
+
+      await db.transaction((txn) async {
+        await txn.delete('expenses');
+        await txn.delete('categories');
+
+        for (var cat in data['categories']) {
+          await txn.insert('categories', Map<String, dynamic>.from(cat));
+        }
+
+        for (var exp in data['expenses']) {
+          await txn.insert('expenses', Map<String, dynamic>.from(exp));
+        }
+      });
+
+      return true;
+    } catch (e) {
+      print('Erreur lors de l\'import JSON : $e');
+      return false;
+    }
+  }
 }
 
 final Map<String, IconData> availableCategoryIcons = {
